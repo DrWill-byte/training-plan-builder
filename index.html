@@ -116,6 +116,7 @@
       'Base Phase One':'phase1','Base Phase Two':'phase2','Base Phase Three':'phase3',
       'Build Phase':'build','Preparation Phase':'prep','Taper Phase':'taper'
     };
+    const block_length_in_weeks = 4;
 
     // Anchor taper 4 weeks before race, align to Monday
     let taperStart = new Date(raceDate.getTime() - 4*msWeek);
@@ -195,13 +196,75 @@
       let sp=''; if(tp==='cu'){ if(totalWeeks>=17) sp='Base Phase One'; else if(totalWeeks>=13) sp='Base Phase Two'; else sp='Base Phase Three'; } else sp='Base Phase One';
       cssClass=phaseClass[sp]; let cursor=new Date(startDate);
       const preW=Math.floor((taperStart-startDate)/msWeek);
-      const order=['Base Phase One','Base Phase Two','Base Phase Three','Build Phase','Preparation Phase'];
+      const order=['Base Phase One','Base Phase Two','Base Phase Three','Build Phase','Preparation Phase', 'Taper Phase'];
       let idx=order.indexOf(sp), rem=preW;
-      guidance.push(`➡️ <strong>${sp}</strong> for 4 weeks starting ${formatDate(cursor)}.`); blocks.push({name:sp,len:4}); cursor.setTime(cursor.getTime()+4*msWeek); rem-=4;
-      while(rem>=4&&idx<order.length-1){ idx++; const ph=order[idx]; guidance.push(`➡️ <strong>${ph}</strong> for 4 weeks starting ${formatDate(cursor)}.`); blocks.push({name:ph,len:4}); cursor.setTime(cursor.getTime()+4*msWeek); rem-=4;}      
-      if(rem>0){ const phNext=order[Math.min(idx+1,order.length-1)]; guidance.push(`➡️ <strong>${phNext}</strong> for ${rem} week${rem!==1?'s':''} starting ${formatDate(cursor)}.`); blocks.push({name:phNext,len:rem}); cursor.setTime(cursor.getTime()+rem*msWeek);}      
-      guidance.push(`➡️ <strong>Taper Phase</strong> for 4 weeks starting ${formatDate(taperStart)} leading into race week.`);
-      blocks.push({name:'Taper Phase',len:4});
+
+      let long_lead = [`Base Phase Two`, 
+					   `Base Phase Two`,
+					   `Base Phase Two`,
+					   `Base Phase Two`,
+					   `Base Phase Three`,
+					   `Base Phase Three`,
+					   `Base Phase Three`,
+					   `Base Phase Three`];
+
+      let guidance_pattern=[];
+      for(let i = 0; i < order.length; i++){
+        const ph=order[i];
+        for(let j = 0; j < block_length_in_weeks; j++){
+          guidance_pattern.push(`${ph}`);
+		}
+      }
+
+      // Always taper.
+      end_guidance = guidance_pattern.slice(0-Math.min(totalWeeks, block_length_in_weeks));
+    
+      // Taper is already accounted for in end_guidance, don't include it here
+      start_guidance = guidance_pattern.slice(0, guidance_pattern.length-end_guidance.length);
+    
+      // Make list start at sp.
+      start_guidance = start_guidance.slice(idx*block_length_in_weeks, guidance_pattern.length);
+    
+      // don't take longer than we have. It won't slice longer than there is in the list
+      start_guidance = start_guidance.slice(0, totalWeeks-end_guidance.length);
+
+      //if time to taper is longer than our pattern, fill in after sp and before the taper
+      if (totalWeeks-4 > start_guidance.length){
+        // grab sp.
+        let new_start = start_guidance.slice(0, block_length_in_weeks);
+        // fill
+        for (let i = 0; i < totalWeeks-4-start_guidance.length; i++){
+          new_start.push(long_lead[i%long_lead.length]);
+        }
+        // grab end of pattern, except taper, which is in end_guidance. Skip the sp phase, because it was already added.
+        for (const week of start_guidance.slice(block_length_in_weeks)){
+          new_start.push(week);
+        }
+        start_guidance = new_start;
+      }
+      
+	  // put together the parts
+      let my_guidance = start_guidance.concat(end_guidance);
+    
+      let curr_phase = my_guidance[0];
+      let phase_count = 0;
+	  
+	  // build schedule
+      for (const week of my_guidance){
+        if (week == curr_phase){
+          phase_count++;
+        } else {
+          cursor.setTime(cursor.getTime()+phase_count*msWeek); 
+          guidance.push(`➡️ <strong>${curr_phase}</strong> for ${phase_count} weeks starting ${formatDate(cursor)}.`);
+          blocks.push({name:curr_phase,len:phase_count});
+          phase_count = 1;
+          curr_phase = week
+        }
+      }
+	  // once more for last block in list
+	  cursor.setTime(cursor.getTime()+phase_count*msWeek); 
+	  guidance.push(`➡️ <strong>${curr_phase}</strong> for ${phase_count} weeks starting ${formatDate(cursor)}.`);
+	  blocks.push({name:curr_phase,len:phase_count});
     }
 
     // Render
